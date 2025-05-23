@@ -34,10 +34,13 @@ from verl.utils.fsdp_utils import get_fsdp_wrap_policy, init_fn, get_init_weight
 from verl.utils.fsdp_utils import offload_fsdp_optimizer, offload_fsdp_model_to_cpu, load_fsdp_optimizer, \
     load_fsdp_model_to_gpu
 from verl.utils.import_utils import import_external_libs
-from verl.utils.model import compute_position_id_with_mask
+from verl.utils.model import compute_position_id_with_mask, print_model_size, PrecisionType
 from verl.utils.flops_counter import FlopsCounter
 from verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
 from verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
+from verl.utils.fs import copy_local_path_from_hdfs
+from verl.utils.fsdp import get_fsdp_wrap_policy, get_init_weight_context_manager
+from verl.verl.utils.hf_tokenizer import fix_qwen3_config
 
 from codetiming import Timer
 
@@ -189,16 +192,69 @@ class ActorRolloutRefWorker(Worker):
         if self.rank == 0:
             print(f'Model config after override: {actor_model_config}')
 
+        # Fix Qwen3 specific configuration issues
+        actor_model_config = fix_qwen3_config(actor_model_config)
+
         # NOTE(fix me): tie_word_embedding causes meta_tensor init to hang
         init_context = get_init_weight_context_manager(use_meta_tensor=not actor_model_config.tie_word_embeddings)
 
         with init_context(), warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            actor_module = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=local_path,
-                                                                torch_dtype=torch_dtype,
-                                                                config=actor_model_config,
-                                                                attn_implementation='flash_attention_2',
-                                                                trust_remote_code=trust_remote_code)
+            
+            # Fix for Qwen3 models - patch the parallel_styles check issue
+            try:
+                from transformers.models.qwen3.modeling_qwen3 import Qwen3Model
+                import transformers.modeling_utils
+                
+                # Backup the original post_init method
+                original_post_init = transformers.modeling_utils.PreTrainedModel.post_init
+                
+                def patched_post_init(self):
+                    """Patched post_init to handle None parallel_styles"""
+                    try:
+                        # Check if model has parallel_styles config and fix it if it's None
+                        if hasattr(self.config, '_parallel_styles') and self.config._parallel_styles is None:
+                            self.config._parallel_styles = []
+                        return original_post_init(self)
+                    except TypeError as e:
+                        if "argument of type 'NoneType' is not iterable" in str(e):
+                            # Handle the specific case where parallel_styles is None
+                            if hasattr(self.config, '_parallel_styles'):
+                                self.config._parallel_styles = []
+                            elif hasattr(self.config, 'parallel_styles'):
+                                self.config.parallel_styles = []
+                            return original_post_init(self)
+                        else:
+                            raise e
+                
+                # Apply the patch temporarily
+                transformers.modeling_utils.PreTrainedModel.post_init = patched_post_init
+                
+                actor_module = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=local_path,
+                                                                    torch_dtype=torch_dtype,
+                                                                    config=actor_model_config,
+                                                                    attn_implementation='flash_attention_2',
+                                                                    trust_remote_code=trust_remote_code)
+                
+                # Restore the original post_init method
+                transformers.modeling_utils.PreTrainedModel.post_init = original_post_init
+                
+            except (ImportError, AttributeError):
+                # If Qwen3 is not available or we can't patch, fall back to normal loading
+                actor_module = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=local_path,
+                                                                    torch_dtype=torch_dtype,
+                                                                    config=actor_model_config,
+                                                                    attn_implementation='flash_attention_2',
+                                                                    trust_remote_code=trust_remote_code)
+            except Exception as e:
+                # If the patch fails for any other reason, try without patch
+                print(f"Warning: Failed to apply Qwen3 patch, trying without patch: {e}")
+                actor_module = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=local_path,
+                                                                    torch_dtype=torch_dtype,
+                                                                    config=actor_model_config,
+                                                                    attn_implementation='flash_attention_2',
+                                                                    trust_remote_code=trust_remote_code)
+            
             # Apply Liger kernel to the model if use_liger is set to True
             if use_liger:
                 from liger_kernel.transformers.monkey_patch import _apply_liger_kernel_to_instance
