@@ -31,6 +31,22 @@ from absolute_zero_reasoner.data_construction.constructor import get_code_proble
 from absolute_zero_reasoner.utils.dataset.rl_dataset import RLHFDataset
 from absolute_zero_reasoner.utils.logging_utils.stdout import PrettyPrinter
 from absolute_zero_reasoner.utils.code_utils.checks import check_composite_function, check_no_definitions
+from absolute_zero_reasoner.rewards.medical_code_reward import (
+    get_medical_visualization_reward,
+    get_medical_scoring_reward,
+    get_medical_data_handling_reward,
+    get_medical_domain_knowledge_reward,
+    get_combined_medical_reward,
+    # Enhanced medical rewards
+    get_enhanced_medical_visualization_reward,
+    get_enhanced_medical_scoring_reward,
+    get_medical_safety_reward,
+    get_clinical_logic_reward,
+    get_medical_interoperability_reward,
+    get_code_quality_medical_balance_reward,
+    get_comprehensive_medical_reward,
+)
+from absolute_zero_reasoner.utils.code_utils.parsers import parse_code_function_name
 
 
 class CodeIORewardManager():
@@ -427,6 +443,46 @@ class CodeIORewardManager():
                             if self.generation_reward_config.answer_diversity_reward.enabled:
                                 intrinsic_reward_components.append(min(self.generation_reward_config.answer_diversity_reward.coef * rewards[uid]['type_counts'],
                                     self.generation_reward_config.answer_diversity_reward.max))
+                            
+                            # Add medical rewards to intrinsic components
+                            if hasattr(self.generation_reward_config, 'medical_visualization_reward') and self.generation_reward_config.medical_visualization_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_visualization_reward.coef * rewards[uid]['medical_visualization'],
+                                    self.generation_reward_config.medical_visualization_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_scoring_reward') and self.generation_reward_config.medical_scoring_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_scoring_reward.coef * rewards[uid]['medical_scoring'],
+                                    self.generation_reward_config.medical_scoring_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_data_handling_reward') and self.generation_reward_config.medical_data_handling_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_data_handling_reward.coef * rewards[uid]['medical_data_handling'],
+                                    self.generation_reward_config.medical_data_handling_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_domain_knowledge_reward') and self.generation_reward_config.medical_domain_knowledge_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_domain_knowledge_reward.coef * rewards[uid]['medical_domain_knowledge'],
+                                    self.generation_reward_config.medical_domain_knowledge_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_combined_reward') and self.generation_reward_config.medical_combined_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_combined_reward.coef * rewards[uid]['medical_combined'],
+                                    self.generation_reward_config.medical_combined_reward.max))
+
+                            # Enhanced medical rewards
+                            if hasattr(self.generation_reward_config, 'enhanced_medical_visualization_reward') and self.generation_reward_config.enhanced_medical_visualization_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.enhanced_medical_visualization_reward.coef * rewards[uid]['enhanced_medical_visualization'],
+                                    self.generation_reward_config.enhanced_medical_visualization_reward.max))
+                            if hasattr(self.generation_reward_config, 'enhanced_medical_scoring_reward') and self.generation_reward_config.enhanced_medical_scoring_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.enhanced_medical_scoring_reward.coef * rewards[uid]['enhanced_medical_scoring'],
+                                    self.generation_reward_config.enhanced_medical_scoring_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_safety_reward') and self.generation_reward_config.medical_safety_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_safety_reward.coef * rewards[uid]['medical_safety'],
+                                    self.generation_reward_config.medical_safety_reward.max))
+                            if hasattr(self.generation_reward_config, 'clinical_logic_reward') and self.generation_reward_config.clinical_logic_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.clinical_logic_reward.coef * rewards[uid]['clinical_logic'],
+                                    self.generation_reward_config.clinical_logic_reward.max))
+                            if hasattr(self.generation_reward_config, 'medical_interoperability_reward') and self.generation_reward_config.medical_interoperability_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.medical_interoperability_reward.coef * rewards[uid]['medical_interoperability'],
+                                    self.generation_reward_config.medical_interoperability_reward.max))
+                            if hasattr(self.generation_reward_config, 'code_quality_medical_balance_reward') and self.generation_reward_config.code_quality_medical_balance_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.code_quality_medical_balance_reward.coef * rewards[uid]['code_quality_medical_balance'],
+                                    self.generation_reward_config.code_quality_medical_balance_reward.max))
+                            if hasattr(self.generation_reward_config, 'comprehensive_medical_reward') and self.generation_reward_config.comprehensive_medical_reward.enabled:
+                                intrinsic_reward_components.append(min(self.generation_reward_config.comprehensive_medical_reward.coef * rewards[uid]['comprehensive_medical'],
+                                    self.generation_reward_config.comprehensive_medical_reward.max))
 
                         final_reward = _combine_rewards(acc_reward, intrinsic_reward_components, self.generation_reward_config.intrinsic_combine_method)
                         reward_tensor[i, valid_response_length - 1] = final_reward
@@ -441,6 +497,22 @@ class CodeIORewardManager():
                 all_scores['complexity'] = [rewards[uid]['complexity'] for uid in rewards]
                 all_scores['mean_edit_distance'] = [rewards[uid]['mean_edit_distance'] for uid in rewards]
                 all_scores['halstead'] = [rewards[uid]['halstead'] for uid in rewards]
+                
+                # Add medical reward tracking
+                all_scores['medical_visualization'] = [rewards[uid]['medical_visualization'] for uid in rewards]
+                all_scores['medical_scoring'] = [rewards[uid]['medical_scoring'] for uid in rewards]
+                all_scores['medical_data_handling'] = [rewards[uid]['medical_data_handling'] for uid in rewards]
+                all_scores['medical_domain_knowledge'] = [rewards[uid]['medical_domain_knowledge'] for uid in rewards]
+                all_scores['medical_combined'] = [rewards[uid]['medical_combined'] for uid in rewards]
+                
+                # Add enhanced medical reward tracking
+                all_scores['enhanced_medical_visualization'] = [rewards[uid]['enhanced_medical_visualization'] for uid in rewards]
+                all_scores['enhanced_medical_scoring'] = [rewards[uid]['enhanced_medical_scoring'] for uid in rewards]
+                all_scores['medical_safety'] = [rewards[uid]['medical_safety'] for uid in rewards]
+                all_scores['clinical_logic'] = [rewards[uid]['clinical_logic'] for uid in rewards]
+                all_scores['medical_interoperability'] = [rewards[uid]['medical_interoperability'] for uid in rewards]
+                all_scores['code_quality_medical_balance'] = [rewards[uid]['code_quality_medical_balance'] for uid in rewards]
+                all_scores['comprehensive_medical'] = [rewards[uid]['comprehensive_medical'] for uid in rewards]
             else:
                 all_scores['input_answer_diversity'] = [rewards[uid]['input_type_counts'] for uid in rewards]
                 all_scores['output_answer_diversity'] = [rewards[uid]['output_type_counts'] for uid in rewards]
@@ -845,6 +917,41 @@ class CodeIORewardManager():
                     type_counters,
                     hierarchical=self.generation_reward_config.answer_diversity_reward.hierarchical
                 ) if 'answer' in data_dict else 0.0
+            
+            # Add medical reward calculations
+            for data_dict in data_dicts:
+                if 'answer' in data_dict:
+                    code_snippet = data_dict['answer'][code_key]
+                    rewards[data_dict['uid']]['medical_visualization'] = get_medical_visualization_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_scoring'] = get_medical_scoring_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_data_handling'] = get_medical_data_handling_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_domain_knowledge'] = get_medical_domain_knowledge_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_combined'] = get_combined_medical_reward(code_snippet)
+                    
+                    # Enhanced medical rewards
+                    rewards[data_dict['uid']]['enhanced_medical_visualization'] = get_enhanced_medical_visualization_reward(code_snippet)
+                    rewards[data_dict['uid']]['enhanced_medical_scoring'] = get_enhanced_medical_scoring_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_safety'] = get_medical_safety_reward(code_snippet)
+                    rewards[data_dict['uid']]['clinical_logic'] = get_clinical_logic_reward(code_snippet)
+                    rewards[data_dict['uid']]['medical_interoperability'] = get_medical_interoperability_reward(code_snippet)
+                    rewards[data_dict['uid']]['code_quality_medical_balance'] = get_code_quality_medical_balance_reward(code_snippet)
+                    rewards[data_dict['uid']]['comprehensive_medical'] = get_comprehensive_medical_reward(code_snippet)
+                else:
+                    rewards[data_dict['uid']]['medical_visualization'] = 0.0
+                    rewards[data_dict['uid']]['medical_scoring'] = 0.0
+                    rewards[data_dict['uid']]['medical_data_handling'] = 0.0
+                    rewards[data_dict['uid']]['medical_domain_knowledge'] = 0.0
+                    rewards[data_dict['uid']]['medical_combined'] = 0.0
+                    
+                    # Enhanced medical rewards default values
+                    rewards[data_dict['uid']]['enhanced_medical_visualization'] = 0.0
+                    rewards[data_dict['uid']]['enhanced_medical_scoring'] = 0.0
+                    rewards[data_dict['uid']]['medical_safety'] = 0.0
+                    rewards[data_dict['uid']]['clinical_logic'] = 0.0
+                    rewards[data_dict['uid']]['medical_interoperability'] = 0.0
+                    rewards[data_dict['uid']]['code_quality_medical_balance'] = 0.0
+                    rewards[data_dict['uid']]['comprehensive_medical'] = 0.0
+
             if self.debug:
                 for data_dict in data_dicts:
                     if 'answer' in data_dict:
