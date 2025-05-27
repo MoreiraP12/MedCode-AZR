@@ -38,8 +38,7 @@ from verl.utils.model import compute_position_id_with_mask, print_model_size
 from verl.utils.flops_counter import FlopsCounter
 from verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
 from verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
-from verl.utils.fs import copy_local_path_from_hdfs
-from verl.verl.utils.hf_tokenizer import fix_qwen3_config
+from verl.utils.hf_tokenizer import fix_qwen3_config
 
 from codetiming import Timer
 
