@@ -196,6 +196,24 @@ def remove_print_statements(code: str) -> str:
     return ast.unparse(tree)
 
 
+def parse_code_function_name(code: str) -> List[str]:
+    """
+    Extract function names from a code snippet.
+    Returns a list of function names defined in the code.
+    """
+    function_names = []
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                function_names.append(node.name)
+    except Exception as e:
+        # If AST parsing fails, try regex fallback
+        function_pattern = r"^\s*(?:async\s+)?def\s+(\w+)\s*\("
+        function_names = re.findall(function_pattern, code, re.MULTILINE)
+    return function_names
+
+
 if __name__ == "__main__":
     print(parse_error("NameError: name 'x' is not defined"))
     print(parse_error("TypeError: unsupported operand type(s) for -: 'str' and 'str'"))
