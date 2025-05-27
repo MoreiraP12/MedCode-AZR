@@ -34,7 +34,7 @@ from verl.utils.fsdp_utils import get_fsdp_wrap_policy, init_fn, get_init_weight
 from verl.utils.fsdp_utils import offload_fsdp_optimizer, offload_fsdp_model_to_cpu, load_fsdp_optimizer, \
     load_fsdp_model_to_gpu
 from verl.utils.import_utils import import_external_libs
-from verl.utils.model import compute_position_id_with_mask, print_model_size, PrecisionType
+from verl.utils.model import compute_position_id_with_mask, print_model_size
 from verl.utils.flops_counter import FlopsCounter
 from verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
 from verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager

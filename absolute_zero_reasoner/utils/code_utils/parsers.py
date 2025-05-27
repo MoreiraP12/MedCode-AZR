@@ -196,30 +196,6 @@ def remove_print_statements(code: str) -> str:
     return ast.unparse(tree)
 
 
-def parse_code_function_name(code: str) -> List[str]:
-    """
-    Extract all function names from Python code.
-    
-    Args:
-        code: A string containing Python code
-        
-    Returns:
-        A list of function names found in the code
-    """
-    try:
-        # Try using AST parsing first (more robust)
-        tree = ast.parse(code)
-        function_names = []
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                function_names.append(node.name)
-        return function_names
-    except Exception:
-        # Fallback to regex if AST parsing fails
-        function_names = re.findall(r'def\s+(\w+)\s*\(', code)
-        return function_names
-
-
 if __name__ == "__main__":
     print(parse_error("NameError: name 'x' is not defined"))
     print(parse_error("TypeError: unsupported operand type(s) for -: 'str' and 'str'"))
